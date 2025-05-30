@@ -87,7 +87,7 @@ STRICT RULES:
 
     // Call Groq API with error handling
     const result = await streamText({
-      model: groq("mixtral-8x7b-32768"),
+      model: groq("llama-3.1-8b-instant"),
       messages: [{ role: "system", content: systemPrompt }, ...messages],
       temperature: 0.7,
       maxTokens: 1000,

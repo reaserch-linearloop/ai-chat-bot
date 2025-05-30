@@ -11,12 +11,12 @@ A sophisticated AI-powered travel planning chatbot built with Next.js 14+ and Gr
 
 ## Features
 
-- 🤖 **AI-Powered Planning**: Uses Groq's Mixtral-8x7b model for intelligent travel recommendations
+- 🤖 **AI-Powered Planning**: Uses Groq's Llama 3.1 8B Instant model for fast, intelligent travel recommendations
 - 💬 **Multi-turn Conversations**: Maintains context throughout the planning session
 - 🎯 **Travel-Focused**: Strictly limited to travel-related queries with polite refusal of off-topic questions
 - 📱 **ChatGPT-like UI**: Modern, responsive interface with message bubbles and typing indicators
 - 🔒 **Robust Error Handling**: Comprehensive error management with user-friendly messages
-- ⚡ **Real-time Streaming**: Instant AI responses with streaming text generation
+- ⚡ **Real-time Streaming**: Instant AI responses with streaming text generation using Llama 3.1
 
 ## Setup Instructions
 
@@ -79,7 +79,7 @@ The application includes comprehensive error handling for:
 ## Technical Stack
 
 - **Frontend**: Next.js 14+ with App Router, TypeScript, Tailwind CSS
-- **AI Integration**: Groq API with Mixtral-8x7b-32768 model
+- **AI Integration**: Groq API with Llama 3.1 8B Instant model
 - **UI Components**: shadcn/ui components
 - **Deployment**: Vercel with automatic deployments
 
