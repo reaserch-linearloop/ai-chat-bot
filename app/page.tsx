@@ -4,7 +4,20 @@ import type React from "react"
 
 import { useChat } from "ai/react"
 import { useState, useEffect, useRef } from "react"
-import { Send, Bot, User, Plane, MapPin, AlertCircle, RefreshCw, CheckCircle, LogOut } from "lucide-react"
+import {
+  Send,
+  Bot,
+  User,
+  Plane,
+  MapPin,
+  AlertCircle,
+  RefreshCw,
+  CheckCircle,
+  LogOut,
+  Menu,
+  X,
+  Sparkles,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -20,8 +33,10 @@ export default function TravelPlannerChatbot() {
   const [chats, setChats] = useState<ChatSession[]>([])
   const [activeChat, setActiveChat] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, error, reload, setMessages } = useChat({
@@ -31,6 +46,7 @@ export default function TravelPlannerChatbot() {
       setErrorMessage(getErrorMessage(error))
     },
     onFinish: (message) => {
+      setIsTyping(false)
       // Save the conversation after each AI response
       if (activeChat && user && token) {
         saveMessages([...messages, { id: Date.now().toString(), role: "assistant", content: message.content }])
@@ -72,6 +88,18 @@ export default function TravelPlannerChatbot() {
       setErrorMessage(null)
     }
   }, [input, errorMessage])
+
+  // Handle mobile responsiveness
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setMobileMenuOpen(false)
+      }
+    }
+
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
 
   const handleAuth = (authUser: AuthUser, authToken: string) => {
     setUser(authUser)
@@ -133,6 +161,7 @@ export default function TravelPlannerChatbot() {
 
         setMessages(formattedMessages)
         setErrorMessage(null)
+        setMobileMenuOpen(false) // Close mobile menu when chat is selected
       }
     } catch (error) {
       console.error("Error loading chat:", error)
@@ -158,6 +187,7 @@ export default function TravelPlannerChatbot() {
         setActiveChat(newChat._id)
         setMessages([])
         setErrorMessage(null)
+        setMobileMenuOpen(false) // Close mobile menu
       }
     } catch (error) {
       console.error("Error creating chat:", error)
@@ -271,6 +301,7 @@ export default function TravelPlannerChatbot() {
 
     // Clear any existing errors
     setErrorMessage(null)
+    setIsTyping(true)
 
     try {
       await handleSubmit(e)
@@ -284,6 +315,7 @@ export default function TravelPlannerChatbot() {
     } catch (error) {
       console.error("Submit error:", error)
       setErrorMessage("Failed to send message. Please try again.")
+      setIsTyping(false)
     }
   }
 
@@ -314,53 +346,84 @@ export default function TravelPlannerChatbot() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="flex h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 overflow-hidden">
+      {/* Mobile Overlay */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <ChatSidebar
-        chats={chats.map((chat) => ({
-          id: chat._id!,
-          title: chat.title,
-          createdAt: chat.createdAt,
-          lastMessage: chat.lastMessage,
-          messageCount: chat.messageCount,
-        }))}
-        activeChat={activeChat}
-        onChatSelect={loadChat}
-        onNewChat={createNewChat}
-        onDeleteChat={deleteChat}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      <div
+        className={`${
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0 fixed md:relative z-50 transition-transform duration-300 ease-in-out`}
+      >
+        <ChatSidebar
+          chats={chats.map((chat) => ({
+            id: chat._id!,
+            title: chat.title,
+            createdAt: chat.createdAt,
+            lastMessage: chat.lastMessage,
+            messageCount: chat.messageCount,
+          }))}
+          activeChat={activeChat}
+          onChatSelect={loadChat}
+          onNewChat={createNewChat}
+          onDeleteChat={deleteChat}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+      </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b">
-          <div className="px-6 py-4">
+        <div className="bg-white shadow-sm border-b backdrop-blur-sm bg-white/95">
+          <div className="px-4 md:px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
+                {/* Mobile Menu Button */}
+                <Button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden text-gray-600 hover:text-gray-800"
+                >
+                  {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </Button>
+
                 <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
                   <Plane className="w-6 h-6 text-white" />
                 </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Travel Planner AI</h1>
-                  <p className="text-sm text-gray-600 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    Welcome back, {user.name}!
+                <div className="min-w-0">
+                  <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">Travel Planner AI</h1>
+                  <p className="text-xs md:text-sm text-gray-600 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">Welcome back, {user.name}!</span>
                   </p>
                 </div>
               </div>
 
-              <Button onClick={handleLogout} variant="outline" size="sm" className="text-gray-600 hover:text-gray-800">
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="text-gray-600 hover:text-gray-800 hidden md:flex"
+              >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
+              </Button>
+
+              {/* Mobile Logout */}
+              <Button onClick={handleLogout} variant="ghost" size="sm" className="md:hidden text-gray-600">
+                <LogOut className="w-5 h-5" />
               </Button>
             </div>
           </div>
         </div>
 
         {/* Chat Container */}
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-3 md:p-6 min-h-0">
           <Card className="h-full flex flex-col bg-white/80 backdrop-blur-sm shadow-xl border-0">
             {/* Error Alert */}
             {(error || errorMessage) && (
@@ -395,24 +458,27 @@ export default function TravelPlannerChatbot() {
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
               {/* Welcome Message */}
               {messages.length === 0 && (
-                <div className="text-center py-16">
-                  <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                    <Bot className="w-10 h-10 text-white" />
+                <div className="text-center py-8 md:py-16">
+                  <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <Bot className="w-8 h-8 md:w-10 md:h-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-3">
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-3">
                     {activeChat ? "Continue Your Travel Planning" : "Welcome to Travel Planner AI!"}
                   </h2>
-                  <p className="text-gray-600 max-w-lg mx-auto leading-relaxed mb-6">
+                  <p className="text-gray-600 max-w-lg mx-auto leading-relaxed mb-6 text-sm md:text-base px-4">
                     I'm your context-aware travel planning assistant. I'll remember our entire conversation and help you
                     create the perfect itinerary by gathering your preferences step by step.
                   </p>
 
                   {/* Information Collection Process */}
-                  <div className="bg-blue-50 rounded-xl p-6 max-w-2xl mx-auto mb-6">
-                    <h3 className="text-lg font-semibold text-blue-900 mb-4">How I'll Help You Plan:</h3>
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 md:p-6 max-w-2xl mx-auto mb-6 border border-blue-100">
+                    <h3 className="text-base md:text-lg font-semibold text-blue-900 mb-4 flex items-center justify-center gap-2">
+                      <Sparkles className="w-5 h-5" />
+                      How I'll Help You Plan
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div className="flex items-start gap-2">
                         <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
@@ -446,7 +512,7 @@ export default function TravelPlannerChatbot() {
                   </div>
 
                   {/* Example prompts */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto px-4">
                     <div className="text-left p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
                       <p className="text-sm text-blue-800 font-medium mb-1">Start with:</p>
                       <p className="text-xs text-blue-700">"I want to plan a trip to Japan"</p>
@@ -467,26 +533,28 @@ export default function TravelPlannerChatbot() {
               )}
 
               {/* Chat Messages */}
-              {messages.map((message) => (
+              {messages.map((message, index) => (
                 <div
                   key={message.id}
-                  className={`flex gap-4 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                  className={`flex gap-3 md:gap-4 ${message.role === "user" ? "justify-end" : "justify-start"} ${
+                    index === 0 ? "animate-in slide-in-from-bottom-4 duration-500" : ""
+                  }`}
                 >
                   {/* Assistant Avatar */}
                   {message.role === "assistant" && (
                     <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
-                        <Bot className="w-5 h-5 text-white" />
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
+                        <Bot className="w-4 h-4 md:w-5 md:h-5 text-white" />
                       </div>
                     </div>
                   )}
 
                   {/* Message Bubble */}
                   <div
-                    className={`max-w-[75%] rounded-2xl px-5 py-3 shadow-sm ${
+                    className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 md:px-5 py-3 shadow-sm transition-all duration-200 ${
                       message.role === "user"
                         ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                        : "bg-gray-50 text-gray-800 border border-gray-100"
+                        : "bg-gray-50 text-gray-800 border border-gray-100 hover:shadow-md"
                     }`}
                   >
                     {message.role === "assistant" ? (
@@ -499,8 +567,8 @@ export default function TravelPlannerChatbot() {
                   {/* User Avatar */}
                   {message.role === "user" && (
                     <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center shadow-md">
-                        <User className="w-5 h-5 text-white" />
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-600 rounded-full flex items-center justify-center shadow-md">
+                        <User className="w-4 h-4 md:w-5 md:h-5 text-white" />
                       </div>
                     </div>
                   )}
@@ -508,14 +576,14 @@ export default function TravelPlannerChatbot() {
               ))}
 
               {/* Typing Indicator */}
-              {isLoading && (
-                <div className="flex gap-4 justify-start">
+              {(isLoading || isTyping) && (
+                <div className="flex gap-3 md:gap-4 justify-start animate-in slide-in-from-bottom-2 duration-300">
                   <div className="flex-shrink-0">
-                    <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
-                      <Bot className="w-5 h-5 text-white" />
+                    <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
+                      <Bot className="w-4 h-4 md:w-5 md:h-5 text-white" />
                     </div>
                   </div>
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 shadow-sm">
+                  <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 md:px-5 py-3 shadow-sm">
                     <div className="flex items-center space-x-2">
                       <div className="flex space-x-1">
                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
@@ -538,20 +606,20 @@ export default function TravelPlannerChatbot() {
             </div>
 
             {/* Input Area */}
-            <div className="border-t bg-gray-50/50 backdrop-blur-sm p-4">
-              <form onSubmit={onSubmit} className="flex gap-3">
+            <div className="border-t bg-gray-50/50 backdrop-blur-sm p-3 md:p-4">
+              <form onSubmit={onSubmit} className="flex gap-2 md:gap-3">
                 <Input
                   value={input}
                   onChange={handleInputChange}
-                  placeholder="Tell me about your travel plans... (I'll remember everything we discuss)"
-                  className="flex-1 border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white shadow-sm"
+                  placeholder="Tell me about your travel plans..."
+                  className="flex-1 border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white shadow-sm text-sm md:text-base"
                   disabled={isLoading}
                   autoFocus
                 />
                 <Button
                   type="submit"
                   disabled={isLoading || !input.trim()}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 shadow-md transition-all duration-200"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 md:px-6 shadow-md transition-all duration-200 disabled:opacity-50"
                 >
                   {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </Button>
