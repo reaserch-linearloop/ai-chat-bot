@@ -44,6 +44,29 @@ export async function POST(req: Request) {
           },
         )
       }
+
+      // Clean and validate messages to prevent duplicates
+      const cleanedMessages = messages
+        .filter((msg) => msg && msg.content && msg.content.trim())
+        .map((msg, index) => ({
+          role: msg.role === "assistant" ? "assistant" : "user",
+          content: msg.content.trim(),
+          timestamp: msg.timestamp || Date.now() + index, // Ensure unique timestamps
+        }))
+
+      // Remove consecutive duplicate messages
+      const deduplicatedMessages = []
+      for (let i = 0; i < cleanedMessages.length; i++) {
+        const current = cleanedMessages[i]
+        const previous = deduplicatedMessages[deduplicatedMessages.length - 1]
+
+        // Only add if it's different from the previous message
+        if (!previous || previous.role !== current.role || previous.content !== current.content) {
+          deduplicatedMessages.push(current)
+        }
+      }
+
+      messages = deduplicatedMessages
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError)
       return new Response(

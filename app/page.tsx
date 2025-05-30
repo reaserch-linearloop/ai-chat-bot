@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useChat } from "ai/react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import {
   Send,
   Bot,
@@ -65,19 +65,23 @@ export default function TravelPlannerChatbot() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const [isTyping, setIsTyping] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const lastSavedMessageCount = useRef(0)
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, error, reload, setMessages } = useChat({
     api: "/api/chat",
     onError: (error) => {
       console.error("Chat error:", error)
       setErrorMessage(getErrorMessage(error))
+      setIsTyping(false)
     },
     onFinish: (message) => {
       setIsTyping(false)
-      // Save the conversation after each AI response
+      // Save the conversation after each AI response with proper deduplication
       if (activeChat && user && token) {
-        saveMessages([...messages, { id: Date.now().toString(), role: "assistant", content: message.content }])
+        const newMessages = [...messages, { id: Date.now().toString(), role: "assistant", content: message.content }]
+        saveMessages(newMessages)
       }
     },
   })
@@ -129,14 +133,14 @@ export default function TravelPlannerChatbot() {
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  const handleAuth = (authUser: AuthUser, authToken: string) => {
+  const handleAuth = useCallback((authUser: AuthUser, authToken: string) => {
     setUser(authUser)
     setToken(authToken)
     localStorage.setItem("travel-planner-token", authToken)
     localStorage.setItem("travel-planner-user", JSON.stringify(authUser))
-  }
+  }, [])
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setUser(null)
     setToken(null)
     setChats([])
@@ -144,9 +148,10 @@ export default function TravelPlannerChatbot() {
     setMessages([])
     localStorage.removeItem("travel-planner-token")
     localStorage.removeItem("travel-planner-user")
-  }
+    lastSavedMessageCount.current = 0
+  }, [setMessages])
 
-  const loadChats = async () => {
+  const loadChats = useCallback(async () => {
     if (!token) return
 
     try {
@@ -179,7 +184,7 @@ export default function TravelPlannerChatbot() {
 
       setChats(sanitizedChats)
 
-      // Load the most recent chat if available
+      // Load the most recent chat if available and no active chat
       if (sanitizedChats.length > 0 && !activeChat) {
         loadChat(sanitizedChats[0]._id)
       }
@@ -187,40 +192,56 @@ export default function TravelPlannerChatbot() {
       console.error("Error loading chats:", error)
       setErrorMessage("Failed to load your conversations. Please try refreshing the page.")
     }
-  }
+  }, [token, activeChat])
 
-  const loadChat = async (chatId: string) => {
-    if (!token || !chatId) return
+  const loadChat = useCallback(
+    async (chatId: string) => {
+      if (!token || !chatId) return
 
-    try {
-      const response = await fetch(`/api/chats/${chatId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      try {
+        const response = await fetch(`/api/chats/${chatId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
 
-      if (!response.ok) {
-        throw new Error(`Failed to load chat: ${response.status}`)
+        if (!response.ok) {
+          throw new Error(`Failed to load chat: ${response.status}`)
+        }
+
+        const chatMessages = await response.json()
+        setActiveChat(chatId)
+
+        // Validate and sanitize messages
+        const validMessages = Array.isArray(chatMessages) ? chatMessages : []
+
+        // Remove duplicates and ensure proper ordering
+        const uniqueMessages = []
+        const seenMessages = new Set()
+
+        for (const msg of validMessages) {
+          const messageKey = `${msg.role}:${msg.content?.trim()}`
+          if (!seenMessages.has(messageKey) && msg.content?.trim()) {
+            seenMessages.add(messageKey)
+            uniqueMessages.push({
+              id: msg._id?.toString() || `msg-${Date.now()}-${uniqueMessages.length}`,
+              role: msg.role === "assistant" ? "assistant" : "user",
+              content: msg.content.trim(),
+            })
+          }
+        }
+
+        setMessages(uniqueMessages)
+        lastSavedMessageCount.current = uniqueMessages.length
+        setErrorMessage(null)
+        setMobileMenuOpen(false)
+      } catch (error) {
+        console.error("Error loading chat:", error)
+        setErrorMessage("Failed to load this conversation. Please try selecting another chat.")
       }
+    },
+    [token, setMessages],
+  )
 
-      const chatMessages = await response.json()
-      setActiveChat(chatId)
-
-      // Validate and sanitize messages
-      const validMessages = Array.isArray(chatMessages) ? chatMessages : []
-      const formattedMessages = validMessages.map((msg: any, index: number) => ({
-        id: msg._id?.toString() || `msg-${Date.now()}-${index}`,
-        role: msg.role === "assistant" ? "assistant" : "user",
-        content: msg.content || "",
-      }))
-
-      setMessages(formattedMessages)
-      setErrorMessage(null)
-    } catch (error) {
-      console.error("Error loading chat:", error)
-      setErrorMessage("Failed to load this conversation. Please try selecting another chat.")
-    }
-  }
-
-  const createNewChat = async () => {
+  const createNewChat = useCallback(async () => {
     if (!token) return
 
     try {
@@ -238,68 +259,102 @@ export default function TravelPlannerChatbot() {
         setChats((prev) => [newChat, ...prev])
         setActiveChat(newChat._id)
         setMessages([])
+        lastSavedMessageCount.current = 0
         setErrorMessage(null)
-        setMobileMenuOpen(false) // Close mobile menu
+        setMobileMenuOpen(false)
       }
     } catch (error) {
       console.error("Error creating chat:", error)
+      setErrorMessage("Failed to create new chat. Please try again.")
     }
-  }
+  }, [token, setMessages])
 
-  const deleteChat = async (chatId: string) => {
-    if (!token) return
+  const deleteChat = useCallback(
+    async (chatId: string) => {
+      if (!token) return
 
-    try {
-      const response = await fetch(`/api/chats/${chatId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      try {
+        const response = await fetch(`/api/chats/${chatId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        })
 
-      if (response.ok) {
-        setChats((prev) => prev.filter((chat) => chat._id !== chatId))
+        if (response.ok) {
+          setChats((prev) => prev.filter((chat) => chat._id !== chatId))
 
-        if (activeChat === chatId) {
-          const remainingChats = chats.filter((chat) => chat._id !== chatId)
-          if (remainingChats.length > 0) {
-            loadChat(remainingChats[0]._id!)
-          } else {
-            createNewChat()
+          if (activeChat === chatId) {
+            const remainingChats = chats.filter((chat) => chat._id !== chatId)
+            if (remainingChats.length > 0) {
+              loadChat(remainingChats[0]._id!)
+            } else {
+              createNewChat()
+            }
           }
         }
+      } catch (error) {
+        console.error("Error deleting chat:", error)
+        setErrorMessage("Failed to delete chat. Please try again.")
       }
-    } catch (error) {
-      console.error("Error deleting chat:", error)
-    }
-  }
+    },
+    [token, activeChat, chats, loadChat, createNewChat],
+  )
 
-  const saveMessages = async (messagesToSave: any[]) => {
-    if (!activeChat || !token || messagesToSave.length === 0) return
+  const saveMessages = useCallback(
+    async (messagesToSave: any[]) => {
+      if (!activeChat || !token || messagesToSave.length === 0 || isSaving) return
 
-    try {
-      // Generate title from first user message if this is a new chat
-      const firstUserMessage = messagesToSave.find((msg) => msg.role === "user")?.content
-      const title = firstUserMessage ? generateChatTitle(firstUserMessage) : undefined
+      // Only save if we have new messages
+      if (messagesToSave.length <= lastSavedMessageCount.current) {
+        return
+      }
 
-      await fetch(`/api/chats/${activeChat}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          messages: messagesToSave,
-          title,
-        }),
-      })
+      setIsSaving(true)
 
-      // Refresh chats to update metadata
-      loadChats()
-    } catch (error) {
-      console.error("Error saving messages:", error)
-    }
-  }
+      try {
+        // Get only the new messages that haven't been saved yet
+        const newMessages = messagesToSave.slice(lastSavedMessageCount.current)
 
-  const generateChatTitle = (firstMessage: string): string => {
+        if (newMessages.length === 0) {
+          setIsSaving(false)
+          return
+        }
+
+        // Generate title from first user message if this is a new chat
+        const firstUserMessage = messagesToSave.find((msg) => msg.role === "user")?.content
+        const title = firstUserMessage ? generateChatTitle(firstUserMessage) : undefined
+
+        const response = await fetch(`/api/chats/${activeChat}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            messages: newMessages,
+            title,
+          }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          lastSavedMessageCount.current = messagesToSave.length
+          console.log(`Saved ${result.savedMessages} new messages`)
+
+          // Refresh chats to update metadata
+          loadChats()
+        } else {
+          console.error("Failed to save messages:", response.status)
+        }
+      } catch (error) {
+        console.error("Error saving messages:", error)
+      } finally {
+        setIsSaving(false)
+      }
+    },
+    [activeChat, token, isSaving, loadChats],
+  )
+
+  const generateChatTitle = useCallback((firstMessage: string): string => {
     try {
       if (!firstMessage || typeof firstMessage !== "string") {
         return "New Trip Plan"
@@ -334,9 +389,9 @@ export default function TravelPlannerChatbot() {
       console.error("Error generating chat title:", error)
       return "New Trip Plan"
     }
-  }
+  }, [])
 
-  const getErrorMessage = (error: Error): string => {
+  const getErrorMessage = useCallback((error: Error): string => {
     const message = error.message.toLowerCase()
 
     if (message.includes("network") || message.includes("fetch")) {
@@ -356,38 +411,45 @@ export default function TravelPlannerChatbot() {
     }
 
     return "Something went wrong. Please try again."
-  }
+  }, [])
 
-  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading) return
+  const onSubmit = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault()
+      if (!input.trim() || isLoading || isSaving) return
 
-    // Create new chat if none exists
-    if (!activeChat) {
-      await createNewChat()
-    }
+      // Create new chat if none exists
+      if (!activeChat) {
+        await createNewChat()
+      }
 
-    // Clear any existing errors
-    setErrorMessage(null)
-    setIsTyping(true)
+      // Clear any existing errors
+      setErrorMessage(null)
+      setIsTyping(true)
 
-    try {
-      await handleSubmit(e)
-      setRetryCount(0)
+      try {
+        await handleSubmit(e)
+        setRetryCount(0)
 
-      // Save user message
-      setTimeout(() => {
-        const newMessages = [...messages, { id: Date.now().toString(), role: "user", content: input }]
+        // Save user message immediately to prevent duplicates
+        const userMessage = { id: Date.now().toString(), role: "user", content: input.trim() }
+        const newMessages = [...messages, userMessage]
+
+        // Update local state immediately
+        setMessages(newMessages)
+
+        // Save to database
         saveMessages(newMessages)
-      }, 100)
-    } catch (error) {
-      console.error("Submit error:", error)
-      setErrorMessage("Failed to send message. Please try again.")
-      setIsTyping(false)
-    }
-  }
+      } catch (error) {
+        console.error("Submit error:", error)
+        setErrorMessage("Failed to send message. Please try again.")
+        setIsTyping(false)
+      }
+    },
+    [input, isLoading, isSaving, activeChat, createNewChat, handleSubmit, messages, setMessages, saveMessages],
+  )
 
-  const handleRetry = async () => {
+  const handleRetry = useCallback(async () => {
     if (retryCount >= 3) {
       setErrorMessage("Multiple attempts failed. Please refresh the page and try again.")
       return
@@ -402,11 +464,11 @@ export default function TravelPlannerChatbot() {
       console.error("Retry error:", error)
       setErrorMessage("Retry failed. Please check your connection.")
     }
-  }
+  }, [retryCount, reload])
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     window.location.reload()
-  }
+  }, [])
 
   // Show auth form if not authenticated
   return (
@@ -471,6 +533,7 @@ export default function TravelPlannerChatbot() {
                       <p className="text-xs md:text-sm text-gray-600 flex items-center gap-1">
                         <MapPin className="w-3 h-3 flex-shrink-0" />
                         <span className="truncate">Welcome back, {user.name}!</span>
+                        {isSaving && <span className="text-blue-600 ml-2">Saving...</span>}
                       </p>
                     </div>
                   </div>
@@ -684,15 +747,19 @@ export default function TravelPlannerChatbot() {
                       onChange={handleInputChange}
                       placeholder="Tell me about your travel plans..."
                       className="flex-1 border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white shadow-sm text-sm md:text-base"
-                      disabled={isLoading}
+                      disabled={isLoading || isSaving}
                       autoFocus
                     />
                     <Button
                       type="submit"
-                      disabled={isLoading || !input.trim()}
+                      disabled={isLoading || isSaving || !input.trim()}
                       className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 md:px-6 shadow-md transition-all duration-200 disabled:opacity-50"
                     >
-                      {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {isLoading || isSaving ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
                     </Button>
                   </form>
 
@@ -700,6 +767,7 @@ export default function TravelPlannerChatbot() {
                   <div className="mt-3 text-center">
                     <p className="text-xs text-gray-500">
                       🧠 Context-aware AI • 🎯 Travel planning only • 📝 All chats saved to your account
+                      {isSaving && " • 💾 Saving..."}
                     </p>
                   </div>
                 </div>

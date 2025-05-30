@@ -18,14 +18,42 @@ export async function GET(request: NextRequest, { params }: { params: { chatId: 
     }
 
     const db = await getDatabase()
+    const chats = db.collection<ChatSession>("chats")
     const messages = db.collection<ChatMessage>("messages")
 
+    const chatId = new ObjectId(params.chatId)
+
+    // Verify chat belongs to user
+    const chat = await chats.findOne({ _id: chatId, userId: new ObjectId(user.id) })
+    if (!chat) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 })
+    }
+
+    // Get messages with proper ordering and deduplication
     const chatMessages = await messages
-      .find({ chatId: new ObjectId(params.chatId) })
-      .sort({ timestamp: 1 })
+      .find({ chatId })
+      .sort({ timestamp: 1 }) // Ensure chronological order
       .toArray()
 
-    return NextResponse.json(chatMessages)
+    // Remove any potential duplicates that might exist in the database
+    const deduplicatedMessages = []
+    const seenMessages = new Set()
+
+    for (const message of chatMessages) {
+      const messageKey = `${message.role}:${message.content.trim()}`
+
+      if (!seenMessages.has(messageKey)) {
+        seenMessages.add(messageKey)
+        deduplicatedMessages.push({
+          _id: message._id,
+          role: message.role,
+          content: message.content,
+          timestamp: message.timestamp,
+        })
+      }
+    }
+
+    return NextResponse.json(deduplicatedMessages)
   } catch (error) {
     console.error("Get messages error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -19,6 +19,10 @@ export async function POST(request: NextRequest, { params }: { params: { chatId:
 
     const { messages: newMessages, title } = await request.json()
 
+    if (!Array.isArray(newMessages) || newMessages.length === 0) {
+      return NextResponse.json({ error: "Invalid messages array" }, { status: 400 })
+    }
+
     const db = await getDatabase()
     const chats = db.collection<ChatSession>("chats")
     const messages = db.collection<ChatMessage>("messages")
@@ -31,33 +35,62 @@ export async function POST(request: NextRequest, { params }: { params: { chatId:
       return NextResponse.json({ error: "Chat not found" }, { status: 404 })
     }
 
-    // Save new messages
-    const messagesToInsert: ChatMessage[] = newMessages.map((msg: any) => ({
-      chatId,
-      role: msg.role,
-      content: msg.content,
-      timestamp: new Date(),
-    }))
+    // Get existing messages to check for duplicates
+    const existingMessages = await messages.find({ chatId }).sort({ timestamp: 1 }).toArray()
 
-    if (messagesToInsert.length > 0) {
-      await messages.insertMany(messagesToInsert)
+    // Create a set of existing message content for duplicate detection
+    const existingMessageHashes = new Set(existingMessages.map((msg) => `${msg.role}:${msg.content.trim()}`))
+
+    // Filter out duplicates and prepare new messages
+    const uniqueNewMessages = newMessages
+      .filter((msg) => {
+        if (!msg || !msg.content || !msg.content.trim()) return false
+        const hash = `${msg.role}:${msg.content.trim()}`
+        return !existingMessageHashes.has(hash)
+      })
+      .map((msg, index) => {
+        const timestamp = new Date()
+        // Add milliseconds to ensure unique timestamps for ordering
+        timestamp.setMilliseconds(timestamp.getMilliseconds() + index)
+
+        return {
+          chatId,
+          role: msg.role === "assistant" ? "assistant" : "user",
+          content: msg.content.trim(),
+          timestamp,
+        } as ChatMessage
+      })
+
+    // Only insert if we have unique messages
+    if (uniqueNewMessages.length > 0) {
+      await messages.insertMany(uniqueNewMessages)
     }
 
-    // Update chat metadata
-    const lastMessage = newMessages[newMessages.length - 1]?.content
-    await chats.updateOne(
-      { _id: chatId },
-      {
-        $set: {
-          updatedAt: new Date(),
-          messageCount: await messages.countDocuments({ chatId }),
-          ...(lastMessage && { lastMessage }),
-          ...(title && { title }),
-        },
-      },
-    )
+    // Get the total message count and last message for chat metadata
+    const totalMessages = await messages.countDocuments({ chatId })
+    const lastMessage = await messages.findOne({ chatId }, { sort: { timestamp: -1 } })
 
-    return NextResponse.json({ success: true })
+    // Update chat metadata
+    const updateData: any = {
+      updatedAt: new Date(),
+      messageCount: totalMessages,
+    }
+
+    if (lastMessage) {
+      updateData.lastMessage = lastMessage.content.substring(0, 100) // Truncate for preview
+    }
+
+    if (title && typeof title === "string" && title.trim()) {
+      updateData.title = title.trim()
+    }
+
+    await chats.updateOne({ _id: chatId }, { $set: updateData })
+
+    return NextResponse.json({
+      success: true,
+      savedMessages: uniqueNewMessages.length,
+      totalMessages,
+    })
   } catch (error) {
     console.error("Save messages error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
