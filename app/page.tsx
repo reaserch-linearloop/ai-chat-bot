@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useChat } from "ai/react"
 import { useState, useEffect, useRef } from "react"
-import { Send, Bot, User, Plane, MapPin, AlertCircle, RefreshCw } from "lucide-react"
+import { Send, Bot, User, Plane, MapPin, AlertCircle, RefreshCw, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -111,7 +111,7 @@ export default function TravelPlannerChatbot() {
               <h1 className="text-2xl font-bold text-gray-900">Travel Planner AI</h1>
               <p className="text-sm text-gray-600 flex items-center gap-1">
                 <MapPin className="w-3 h-3" />
-                Your intelligent travel planning assistant
+                Context-aware travel planning assistant
               </p>
             </div>
           </div>
@@ -162,24 +162,63 @@ export default function TravelPlannerChatbot() {
                   <Bot className="w-10 h-10 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-3">Welcome to Travel Planner AI!</h2>
-                <p className="text-gray-600 max-w-lg mx-auto leading-relaxed">
-                  I'm your personal travel planning assistant. I'll help you create the perfect itinerary by gathering
-                  your travel preferences and generating customized recommendations.
+                <p className="text-gray-600 max-w-lg mx-auto leading-relaxed mb-6">
+                  I'm your context-aware travel planning assistant. I'll remember our entire conversation and help you
+                  create the perfect itinerary by gathering your preferences step by step.
                 </p>
-                <div className="mt-6 text-sm text-gray-500">
-                  <p>✈️ Flight recommendations • 🏨 Hotel suggestions • 📅 Day-wise planning • 💰 Budget breakdown</p>
+
+                {/* Information Collection Process */}
+                <div className="bg-blue-50 rounded-xl p-6 max-w-2xl mx-auto mb-6">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-4">How I'll Help You Plan:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-800">Personal Details</p>
+                        <p className="text-gray-600">Name & Email</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-800">Travel Route</p>
+                        <p className="text-gray-600">From & To locations</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-800">Schedule</p>
+                        <p className="text-gray-600">Dates & Duration</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-800">Budget</p>
+                        <p className="text-gray-600">Your travel budget</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Example prompts */}
-                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
-                  <div className="text-left p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <p className="text-sm text-blue-800 font-medium">Try asking:</p>
-                    <p className="text-xs text-blue-600 mt-1">"I want to plan a trip to Japan for 7 days"</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
+                  <div className="text-left p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-800 font-medium mb-1">Start with:</p>
+                    <p className="text-xs text-blue-700">"I want to plan a trip to Japan"</p>
                   </div>
-                  <div className="text-left p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-                    <p className="text-sm text-indigo-800 font-medium">Or say:</p>
-                    <p className="text-xs text-indigo-600 mt-1">"Help me plan a budget trip to Europe"</p>
+                  <div className="text-left p-4 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-lg border border-indigo-200">
+                    <p className="text-sm text-indigo-800 font-medium mb-1">Or say:</p>
+                    <p className="text-xs text-indigo-700">"Help me plan a budget trip to Europe"</p>
                   </div>
+                </div>
+
+                <div className="mt-6 text-xs text-gray-500">
+                  <p>
+                    🎯 I only help with travel planning • 🧠 I remember our entire conversation • ✈️ I create detailed
+                    itineraries
+                  </p>
                 </div>
               </div>
             )}
@@ -242,7 +281,7 @@ export default function TravelPlannerChatbot() {
                         style={{ animationDelay: "0.2s" }}
                       ></div>
                     </div>
-                    <span className="text-xs text-gray-500 ml-2">Planning your trip...</span>
+                    <span className="text-xs text-gray-500 ml-2">Analyzing your travel needs...</span>
                   </div>
                 </div>
               </div>
@@ -257,7 +296,7 @@ export default function TravelPlannerChatbot() {
               <Input
                 value={input}
                 onChange={handleInputChange}
-                placeholder="Tell me about your travel plans... (e.g., I want to visit Paris)"
+                placeholder="Tell me about your travel plans... (I'll remember everything we discuss)"
                 className="flex-1 border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white shadow-sm"
                 disabled={isLoading}
                 autoFocus
@@ -274,7 +313,7 @@ export default function TravelPlannerChatbot() {
             {/* Helper Text */}
             <div className="mt-3 text-center">
               <p className="text-xs text-gray-500">
-                🌍 I specialize in travel planning • Ask me about destinations, itineraries, budgets, and more!
+                🧠 Context-aware AI • 🎯 Travel planning only • 📝 Remembers our conversation
               </p>
             </div>
           </div>
