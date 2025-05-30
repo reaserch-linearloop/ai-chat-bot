@@ -4,17 +4,24 @@ import type React from "react"
 
 import { useChat } from "ai/react"
 import { useState, useEffect, useRef } from "react"
-import { Send, Bot, User, Plane, MapPin } from "lucide-react"
+import { Send, Bot, User, Plane, MapPin, AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function TravelPlannerChatbot() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error, reload } = useChat({
     api: "/api/chat",
+    onError: (error) => {
+      console.error("Chat error:", error)
+      setErrorMessage(getErrorMessage(error))
+    },
   })
 
   const [isTyping, setIsTyping] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom when new messages arrive
@@ -22,15 +29,73 @@ export default function TravelPlannerChatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  // Clear error message when user starts typing
+  useEffect(() => {
+    if (input && errorMessage) {
+      setErrorMessage(null)
+    }
+  }, [input, errorMessage])
+
+  const getErrorMessage = (error: Error): string => {
+    const message = error.message.toLowerCase()
+
+    if (message.includes("network") || message.includes("fetch")) {
+      return "Network connection issue. Please check your internet and try again."
+    }
+    if (message.includes("401") || message.includes("unauthorized")) {
+      return "Authentication error. The service is temporarily unavailable."
+    }
+    if (message.includes("429") || message.includes("rate limit")) {
+      return "Too many requests. Please wait a moment before trying again."
+    }
+    if (message.includes("timeout")) {
+      return "Request timed out. Please try again."
+    }
+    if (message.includes("configuration") || message.includes("api key")) {
+      return "Service configuration issue. Please try again later."
+    }
+
+    return "Something went wrong. Please try again."
+  }
+
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
+    // Clear any existing errors
+    setErrorMessage(null)
     setIsTyping(true)
-    handleSubmit(e)
 
-    // Reset typing indicator
-    setTimeout(() => setIsTyping(false), 1500)
+    try {
+      await handleSubmit(e)
+      setRetryCount(0) // Reset retry count on successful submission
+    } catch (error) {
+      console.error("Submit error:", error)
+      setErrorMessage("Failed to send message. Please try again.")
+    } finally {
+      setTimeout(() => setIsTyping(false), 1500)
+    }
+  }
+
+  const handleRetry = async () => {
+    if (retryCount >= 3) {
+      setErrorMessage("Multiple attempts failed. Please refresh the page and try again.")
+      return
+    }
+
+    setRetryCount((prev) => prev + 1)
+    setErrorMessage(null)
+
+    try {
+      await reload()
+    } catch (error) {
+      console.error("Retry error:", error)
+      setErrorMessage("Retry failed. Please check your connection.")
+    }
+  }
+
+  const handleRefresh = () => {
+    window.location.reload()
   }
 
   return (
@@ -56,6 +121,38 @@ export default function TravelPlannerChatbot() {
       {/* Chat Container */}
       <div className="max-w-4xl mx-auto px-4 py-6">
         <Card className="h-[calc(100vh-180px)] flex flex-col bg-white/80 backdrop-blur-sm shadow-xl border-0">
+          {/* Error Alert */}
+          {(error || errorMessage) && (
+            <div className="p-4 border-b">
+              <Alert className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  {errorMessage || getErrorMessage(error)}
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      onClick={handleRetry}
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100"
+                      disabled={retryCount >= 3}
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Retry {retryCount > 0 && `(${retryCount}/3)`}
+                    </Button>
+                    <Button
+                      onClick={handleRefresh}
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100"
+                    >
+                      Refresh Page
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Welcome Message */}
@@ -71,6 +168,18 @@ export default function TravelPlannerChatbot() {
                 </p>
                 <div className="mt-6 text-sm text-gray-500">
                   <p>✈️ Flight recommendations • 🏨 Hotel suggestions • 📅 Day-wise planning • 💰 Budget breakdown</p>
+                </div>
+
+                {/* Example prompts */}
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
+                  <div className="text-left p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p className="text-sm text-blue-800 font-medium">Try asking:</p>
+                    <p className="text-xs text-blue-600 mt-1">"I want to plan a trip to Japan for 7 days"</p>
+                  </div>
+                  <div className="text-left p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                    <p className="text-sm text-indigo-800 font-medium">Or say:</p>
+                    <p className="text-xs text-indigo-600 mt-1">"Help me plan a budget trip to Europe"</p>
+                  </div>
                 </div>
               </div>
             )}
@@ -158,7 +267,7 @@ export default function TravelPlannerChatbot() {
                 disabled={isLoading || !input.trim()}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 shadow-md transition-all duration-200"
               >
-                <Send className="w-4 h-4" />
+                {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </form>
 
