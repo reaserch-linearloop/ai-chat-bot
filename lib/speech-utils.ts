@@ -1,17 +1,23 @@
-// Inline type declarations for Web Speech API
+// Type definitions for Web Speech API
 interface SpeechRecognitionEvent extends Event {
   readonly resultIndex: number
-  readonly results: {
-    readonly length: number
-    [index: number]: {
-      readonly isFinal: boolean
-      readonly length: number
-      [index: number]: {
-        readonly transcript: string
-        readonly confidence: number
-      }
-    }
-  }
+  readonly results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean
+  readonly length: number
+  [index: number]: SpeechRecognitionAlternative
+}
+
+interface SpeechRecognitionAlternative {
+  readonly transcript: string
+  readonly confidence: number
 }
 
 interface SpeechRecognitionErrorEvent extends Event {
@@ -30,10 +36,11 @@ interface SpeechRecognition extends EventTarget {
   onend: (() => void) | null
 }
 
+// Extend Window interface
 declare global {
   interface Window {
-    SpeechRecognition: new () => SpeechRecognition
-    webkitSpeechRecognition: new () => SpeechRecognition
+    SpeechRecognition?: new () => SpeechRecognition
+    webkitSpeechRecognition?: new () => SpeechRecognition
   }
 }
 
@@ -42,11 +49,9 @@ export class SpeechUtils {
   private static isListening = false
 
   static isSupported(): boolean {
-    return (
-      typeof window !== "undefined" &&
-      ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) &&
-      "speechSynthesis" in window
-    )
+    if (typeof window === "undefined") return false
+
+    return ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) && "speechSynthesis" in window
   }
 
   static initializeRecognition(): SpeechRecognition | null {
@@ -88,9 +93,12 @@ export class SpeechUtils {
       let isFinal = false
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          isFinal = true
+        const result = event.results[i]
+        if (result && result[0]) {
+          transcript += result[0].transcript
+          if (result.isFinal) {
+            isFinal = true
+          }
         }
       }
 
@@ -119,7 +127,11 @@ export class SpeechUtils {
 
   static stopListening(): void {
     if (this.recognition && this.isListening) {
-      this.recognition.stop()
+      try {
+        this.recognition.stop()
+      } catch (error) {
+        console.error("Error stopping speech recognition:", error)
+      }
       this.isListening = false
     }
   }
@@ -168,7 +180,11 @@ export class SpeechUtils {
 
   static stopSpeaking(): void {
     if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel()
+      try {
+        window.speechSynthesis.cancel()
+      } catch (error) {
+        console.error("Error stopping speech synthesis:", error)
+      }
     }
   }
 
@@ -176,7 +192,12 @@ export class SpeechUtils {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       return []
     }
-    return window.speechSynthesis.getVoices()
+    try {
+      return window.speechSynthesis.getVoices()
+    } catch (error) {
+      console.error("Error getting voices:", error)
+      return []
+    }
   }
 
   static isListeningActive(): boolean {
@@ -211,6 +232,8 @@ export class AudioUtils {
   }
 
   static formatDuration(seconds: number): string {
+    if (!seconds || isNaN(seconds)) return "0:00"
+
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = Math.floor(seconds % 60)
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
@@ -223,7 +246,7 @@ export class AudioUtils {
 
       audio.onloadedmetadata = () => {
         URL.revokeObjectURL(url)
-        resolve(audio.duration)
+        resolve(audio.duration || 0)
       }
 
       audio.onerror = () => {

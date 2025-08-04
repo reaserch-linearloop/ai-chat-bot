@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useChat } from "ai/react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
@@ -84,7 +83,10 @@ export default function TravelPlannerChatbot() {
         setIsTyping(false)
         // Save the conversation after each AI response with proper deduplication
         if (activeChat && user && token) {
-          const newMessages = [...messages, { id: Date.now().toString(), role: "assistant", content: message.content }]
+          const newMessages = [
+            ...messages,
+            { id: Date.now().toString(), role: "assistant" as const, content: message.content },
+          ]
           saveMessages(newMessages)
         }
       },
@@ -93,6 +95,8 @@ export default function TravelPlannerChatbot() {
 
   // Check for stored auth on mount
   useEffect(() => {
+    if (typeof window === "undefined") return
+
     const storedToken = localStorage.getItem("travel-planner-token")
     const storedUser = localStorage.getItem("travel-planner-user")
 
@@ -141,8 +145,10 @@ export default function TravelPlannerChatbot() {
   const handleAuth = useCallback((authUser: AuthUser, authToken: string) => {
     setUser(authUser)
     setToken(authToken)
-    localStorage.setItem("travel-planner-token", authToken)
-    localStorage.setItem("travel-planner-user", JSON.stringify(authUser))
+    if (typeof window !== "undefined") {
+      localStorage.setItem("travel-planner-token", authToken)
+      localStorage.setItem("travel-planner-user", JSON.stringify(authUser))
+    }
   }, [])
 
   const handleLogout = useCallback(() => {
@@ -151,8 +157,10 @@ export default function TravelPlannerChatbot() {
     setChats([])
     setActiveChat(null)
     setMessages([])
-    localStorage.removeItem("travel-planner-token")
-    localStorage.removeItem("travel-planner-user")
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("travel-planner-token")
+      localStorage.removeItem("travel-planner-user")
+    }
     lastSavedMessageCount.current = 0
   }, [setMessages])
 
@@ -228,7 +236,7 @@ export default function TravelPlannerChatbot() {
             seenMessages.add(messageKey)
             uniqueMessages.push({
               id: msg._id?.toString() || `msg-${Date.now()}-${uniqueMessages.length}`,
-              role: msg.role === "assistant" ? "assistant" : "user",
+              role: msg.role === "assistant" ? ("assistant" as const) : ("user" as const),
               content: msg.content.trim(),
             })
           }
@@ -437,7 +445,7 @@ export default function TravelPlannerChatbot() {
         setRetryCount(0)
 
         // Save user message immediately to prevent duplicates
-        const userMessage = { id: Date.now().toString(), role: "user", content: input.trim() }
+        const userMessage = { id: Date.now().toString(), role: "user" as const, content: input.trim() }
         const newMessages = [...messages, userMessage]
 
         // Update local state immediately
@@ -494,333 +502,333 @@ export default function TravelPlannerChatbot() {
     .find((msg) => msg.role === "assistant")?.content
 
   // Show auth form if not authenticated
+  if (!user || !token) {
+    return <AuthForm onAuth={handleAuth} />
+  }
+
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
-      {!user || !token ? (
-        <AuthForm onAuth={handleAuth} />
-      ) : (
-        <div className="flex h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 overflow-hidden">
-          {/* Mobile Overlay */}
-          {mobileMenuOpen && (
-            <div
-              className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-          )}
-
-          {/* Sidebar */}
+      <div className="flex h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 overflow-hidden">
+        {/* Mobile Overlay */}
+        {mobileMenuOpen && (
           <div
-            className={`${
-              mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-            } md:translate-x-0 fixed md:relative z-50 transition-transform duration-300 ease-in-out`}
-          >
-            <ChatSidebar
-              chats={chats.map((chat) => ({
-                id: chat._id!,
-                title: chat.title,
-                createdAt: chat.createdAt,
-                lastMessage: chat.lastMessage,
-                messageCount: chat.messageCount,
-              }))}
-              activeChat={activeChat}
-              onChatSelect={loadChat}
-              onNewChat={createNewChat}
-              onDeleteChat={deleteChat}
-              isCollapsed={sidebarCollapsed}
-              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-            />
-          </div>
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
 
-          {/* Main Chat Area */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {/* Header */}
-            <div className="bg-white shadow-sm border-b backdrop-blur-sm bg-white/95">
-              <div className="px-4 md:px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {/* Mobile Menu Button */}
-                    <Button
-                      onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                      variant="ghost"
-                      size="sm"
-                      className="md:hidden text-gray-600 hover:text-gray-800"
-                    >
-                      {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                    </Button>
+        {/* Sidebar */}
+        <div
+          className={`${
+            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 fixed md:relative z-50 transition-transform duration-300 ease-in-out`}
+        >
+          <ChatSidebar
+            chats={chats.map((chat) => ({
+              id: chat._id!,
+              title: chat.title,
+              createdAt: chat.createdAt,
+              lastMessage: chat.lastMessage,
+              messageCount: chat.messageCount,
+            }))}
+            activeChat={activeChat}
+            onChatSelect={loadChat}
+            onNewChat={createNewChat}
+            onDeleteChat={deleteChat}
+            isCollapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
+        </div>
 
-                    <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-                      <Plane className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">Travel Planner AI</h1>
-                      <p className="text-xs md:text-sm text-gray-600 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate">Welcome back, {user.name}!</span>
-                        {isSaving && <span className="text-blue-600 ml-2">Saving...</span>}
-                      </p>
-                    </div>
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <div className="bg-white shadow-sm border-b backdrop-blur-sm bg-white/95">
+            <div className="px-4 md:px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Mobile Menu Button */}
+                  <Button
+                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    variant="ghost"
+                    size="sm"
+                    className="md:hidden text-gray-600 hover:text-gray-800"
+                  >
+                    {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                  </Button>
+
+                  <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
+                    <Plane className="w-6 h-6 text-white" />
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Speech Panel Toggle */}
-                    <Button
-                      onClick={() => setSpeechPanelVisible(!speechPanelVisible)}
-                      variant="outline"
-                      size="sm"
-                      className={`text-gray-600 hover:text-gray-800 ${speechPanelVisible ? "bg-blue-50 border-blue-200" : ""}`}
-                    >
-                      <Mic className="w-4 h-4 mr-2" />
-                      <span className="hidden md:inline">Speech</span>
-                    </Button>
-
-                    <Button
-                      onClick={handleLogout}
-                      variant="outline"
-                      size="sm"
-                      className="text-gray-600 hover:text-gray-800 hidden md:flex bg-transparent"
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </Button>
-
-                    {/* Mobile Logout */}
-                    <Button onClick={handleLogout} variant="ghost" size="sm" className="md:hidden text-gray-600">
-                      <LogOut className="w-5 h-5" />
-                    </Button>
+                  <div className="min-w-0">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">Travel Planner AI</h1>
+                    <p className="text-xs md:text-sm text-gray-600 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">Welcome back, {user.name}!</span>
+                      {isSaving && <span className="text-blue-600 ml-2">Saving...</span>}
+                    </p>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Speech Panel Toggle */}
+                  <Button
+                    onClick={() => setSpeechPanelVisible(!speechPanelVisible)}
+                    variant="outline"
+                    size="sm"
+                    className={`text-gray-600 hover:text-gray-800 ${speechPanelVisible ? "bg-blue-50 border-blue-200" : ""}`}
+                  >
+                    <Mic className="w-4 h-4 mr-2" />
+                    <span className="hidden md:inline">Speech</span>
+                  </Button>
+
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    size="sm"
+                    className="text-gray-600 hover:text-gray-800 hidden md:flex bg-transparent"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </Button>
+
+                  {/* Mobile Logout */}
+                  <Button onClick={handleLogout} variant="ghost" size="sm" className="md:hidden text-gray-600">
+                    <LogOut className="w-5 h-5" />
+                  </Button>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Chat Container */}
-            <div className="flex-1 p-3 md:p-6 min-h-0">
-              <Card className="h-full flex flex-col bg-white/80 backdrop-blur-sm shadow-xl border-0">
-                {/* Error Alert */}
-                {(error || errorMessage) && (
-                  <div className="p-4 border-b">
-                    <Alert className="border-red-200 bg-red-50">
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                      <AlertDescription className="text-red-800">
-                        {errorMessage || getErrorMessage(error)}
-                        <div className="flex gap-2 mt-2">
-                          <Button
-                            onClick={handleRetry}
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100 bg-transparent"
-                            disabled={retryCount >= 3}
-                          >
-                            <RefreshCw className="w-3 h-3 mr-1" />
-                            Retry {retryCount > 0 && `(${retryCount}/3)`}
-                          </Button>
-                          <Button
-                            onClick={handleRefresh}
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100 bg-transparent"
-                          >
-                            Refresh Page
-                          </Button>
+          {/* Chat Container */}
+          <div className="flex-1 p-3 md:p-6 min-h-0">
+            <Card className="h-full flex flex-col bg-white/80 backdrop-blur-sm shadow-xl border-0">
+              {/* Error Alert */}
+              {(error || errorMessage) && (
+                <div className="p-4 border-b">
+                  <Alert className="border-red-200 bg-red-50">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-red-800">
+                      {errorMessage || getErrorMessage(error)}
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          onClick={handleRetry}
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100 bg-transparent"
+                          disabled={retryCount >= 3}
+                        >
+                          <RefreshCw className="w-3 h-3 mr-1" />
+                          Retry {retryCount > 0 && `(${retryCount}/3)`}
+                        </Button>
+                        <Button
+                          onClick={handleRefresh}
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100 bg-transparent"
+                        >
+                          Refresh Page
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+                {/* Welcome Message */}
+                {messages.length === 0 && (
+                  <div className="text-center py-8 md:py-16">
+                    <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                      <Bot className="w-8 h-8 md:w-10 md:h-10 text-white" />
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-3">
+                      {activeChat ? "Continue Your Travel Planning" : "Welcome to Travel Planner AI!"}
+                    </h2>
+                    <p className="text-gray-600 max-w-lg mx-auto leading-relaxed mb-6 text-sm md:text-base px-4">
+                      I'm your context-aware travel planning assistant. I'll remember our entire conversation and help
+                      you create the perfect itinerary by gathering your preferences step by step.
+                    </p>
+
+                    {/* Information Collection Process */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 md:p-6 max-w-2xl mx-auto mb-6 border border-blue-100">
+                      <h3 className="text-base md:text-lg font-semibold text-blue-900 mb-4 flex items-center justify-center gap-2">
+                        <Sparkles className="w-5 h-5" />
+                        How I'll Help You Plan
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-left">
+                            <p className="font-medium text-gray-800">Personal Details</p>
+                            <p className="text-gray-600">Name & Email</p>
+                          </div>
                         </div>
-                      </AlertDescription>
-                    </Alert>
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-left">
+                            <p className="font-medium text-gray-800">Travel Route</p>
+                            <p className="text-gray-600">From & To locations</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-left">
+                            <p className="font-medium text-gray-800">Schedule</p>
+                            <p className="text-gray-600">Dates & Duration</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-left">
+                            <p className="font-medium text-gray-800">Budget</p>
+                            <p className="text-gray-600">Your travel budget</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Example prompts */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto px-4">
+                      <div className="text-left p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                        <p className="text-sm text-blue-800 font-medium mb-1">Start with:</p>
+                        <p className="text-xs text-blue-700">"I want to plan a trip to Japan"</p>
+                      </div>
+                      <div className="text-left p-4 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-lg border border-indigo-200">
+                        <p className="text-sm text-indigo-800 font-medium mb-1">Or say:</p>
+                        <p className="text-xs text-indigo-700">"Help me plan a budget trip to Europe"</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 text-xs text-gray-500">
+                      <p>
+                        🎯 I only help with travel planning • 🧠 I remember our entire conversation • ✈️ I create
+                        detailed itineraries • 🎤 Use speech for hands-free interaction
+                      </p>
+                    </div>
                   </div>
                 )}
 
-                {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-                  {/* Welcome Message */}
-                  {messages.length === 0 && (
-                    <div className="text-center py-8 md:py-16">
-                      <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                        <Bot className="w-8 h-8 md:w-10 md:h-10 text-white" />
-                      </div>
-                      <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-3">
-                        {activeChat ? "Continue Your Travel Planning" : "Welcome to Travel Planner AI!"}
-                      </h2>
-                      <p className="text-gray-600 max-w-lg mx-auto leading-relaxed mb-6 text-sm md:text-base px-4">
-                        I'm your context-aware travel planning assistant. I'll remember our entire conversation and help
-                        you create the perfect itinerary by gathering your preferences step by step.
-                      </p>
-
-                      {/* Information Collection Process */}
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 md:p-6 max-w-2xl mx-auto mb-6 border border-blue-100">
-                        <h3 className="text-base md:text-lg font-semibold text-blue-900 mb-4 flex items-center justify-center gap-2">
-                          <Sparkles className="w-5 h-5" />
-                          How I'll Help You Plan
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                          <div className="flex items-start gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-left">
-                              <p className="font-medium text-gray-800">Personal Details</p>
-                              <p className="text-gray-600">Name & Email</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-left">
-                              <p className="font-medium text-gray-800">Travel Route</p>
-                              <p className="text-gray-600">From & To locations</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-left">
-                              <p className="font-medium text-gray-800">Schedule</p>
-                              <p className="text-gray-600">Dates & Duration</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-left">
-                              <p className="font-medium text-gray-800">Budget</p>
-                              <p className="text-gray-600">Your travel budget</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Example prompts */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto px-4">
-                        <div className="text-left p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
-                          <p className="text-sm text-blue-800 font-medium mb-1">Start with:</p>
-                          <p className="text-xs text-blue-700">"I want to plan a trip to Japan"</p>
-                        </div>
-                        <div className="text-left p-4 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-lg border border-indigo-200">
-                          <p className="text-sm text-indigo-800 font-medium mb-1">Or say:</p>
-                          <p className="text-xs text-indigo-700">"Help me plan a budget trip to Europe"</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 text-xs text-gray-500">
-                        <p>
-                          🎯 I only help with travel planning • 🧠 I remember our entire conversation • ✈️ I create
-                          detailed itineraries • 🎤 Use speech for hands-free interaction
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Chat Messages */}
-                  {messages.map((message, index) => (
-                    <div
-                      key={message.id}
-                      className={`flex gap-3 md:gap-4 ${message.role === "user" ? "justify-end" : "justify-start"} ${
-                        index === 0 ? "animate-in slide-in-from-bottom-4 duration-500" : ""
-                      }`}
-                    >
-                      {/* Assistant Avatar */}
-                      {message.role === "assistant" && (
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
-                            <Bot className="w-4 h-4 md:w-5 md:h-5 text-white" />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Message Bubble */}
-                      <div
-                        className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 md:px-5 py-3 shadow-sm transition-all duration-200 ${
-                          message.role === "user"
-                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                            : "bg-gray-50 text-gray-800 border border-gray-100 hover:shadow-md"
-                        }`}
-                      >
-                        {message.role === "assistant" ? (
-                          <MarkdownRenderer content={message.content} />
-                        ) : (
-                          <div className="whitespace-pre-wrap leading-relaxed text-sm">{message.content}</div>
-                        )}
-                      </div>
-
-                      {/* User Avatar */}
-                      {message.role === "user" && (
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-600 rounded-full flex items-center justify-center shadow-md">
-                            <User className="w-4 h-4 md:w-5 md:h-5 text-white" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Typing Indicator */}
-                  {(isLoading || isTyping) && (
-                    <div className="flex gap-3 md:gap-4 justify-start animate-in slide-in-from-bottom-2 duration-300">
+                {/* Chat Messages */}
+                {messages.map((message, index) => (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 md:gap-4 ${message.role === "user" ? "justify-end" : "justify-start"} ${
+                      index === 0 ? "animate-in slide-in-from-bottom-4 duration-500" : ""
+                    }`}
+                  >
+                    {/* Assistant Avatar */}
+                    {message.role === "assistant" && (
                       <div className="flex-shrink-0">
                         <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
                           <Bot className="w-4 h-4 md:w-5 md:h-5 text-white" />
                         </div>
                       </div>
-                      <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 md:px-5 py-3 shadow-sm">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                            <div
-                              className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                              style={{ animationDelay: "0.1s" }}
-                            ></div>
-                            <div
-                              className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                              style={{ animationDelay: "0.2s" }}
-                            ></div>
-                          </div>
-                          <span className="text-xs text-gray-500 ml-2">Analyzing your travel needs...</span>
+                    )}
+
+                    {/* Message Bubble */}
+                    <div
+                      className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 md:px-5 py-3 shadow-sm transition-all duration-200 ${
+                        message.role === "user"
+                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                          : "bg-gray-50 text-gray-800 border border-gray-100 hover:shadow-md"
+                      }`}
+                    >
+                      {message.role === "assistant" ? (
+                        <MarkdownRenderer content={message.content} />
+                      ) : (
+                        <div className="whitespace-pre-wrap leading-relaxed text-sm">{message.content}</div>
+                      )}
+                    </div>
+
+                    {/* User Avatar */}
+                    {message.role === "user" && (
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-600 rounded-full flex items-center justify-center shadow-md">
+                          <User className="w-4 h-4 md:w-5 md:h-5 text-white" />
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input Area */}
-                <div className="border-t bg-gray-50/50 backdrop-blur-sm p-3 md:p-4">
-                  <form onSubmit={onSubmit} className="flex gap-2 md:gap-3">
-                    <Input
-                      value={input}
-                      onChange={handleInputChange}
-                      placeholder="Tell me about your travel plans... (or use speech)"
-                      className="flex-1 border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white shadow-sm text-sm md:text-base"
-                      disabled={isLoading || isSaving}
-                      autoFocus
-                    />
-                    <Button
-                      type="submit"
-                      disabled={isLoading || isSaving || !input.trim()}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 md:px-6 shadow-md transition-all duration-200 disabled:opacity-50"
-                    >
-                      {isLoading || isSaving ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-                    </Button>
-                  </form>
-
-                  {/* Helper Text */}
-                  <div className="mt-3 text-center">
-                    <p className="text-xs text-gray-500">
-                      🧠 Context-aware AI • 🎯 Travel planning only • 📝 All chats saved to your account
-                      {isSaving && " • 💾 Saving..."}
-                    </p>
+                    )}
                   </div>
-                </div>
-              </Card>
-            </div>
-          </div>
+                ))}
 
-          {/* Speech Panel */}
-          <SpeechPanel
-            onTranscriptChange={handleTranscriptChange}
-            onSpeakText={handleSpeakText}
-            lastAssistantMessage={lastAssistantMessage}
-            isVisible={speechPanelVisible}
-            onToggleVisibility={() => setSpeechPanelVisible(!speechPanelVisible)}
-          />
+                {/* Typing Indicator */}
+                {(isLoading || isTyping) && (
+                  <div className="flex gap-3 md:gap-4 justify-start animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
+                        <Bot className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 md:px-5 py-3 shadow-sm">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                          <div
+                            className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                            style={{ animationDelay: "0.1s" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                            style={{ animationDelay: "0.2s" }}
+                          ></div>
+                        </div>
+                        <span className="text-xs text-gray-500 ml-2">Analyzing your travel needs...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="border-t bg-gray-50/50 backdrop-blur-sm p-3 md:p-4">
+                <form onSubmit={onSubmit} className="flex gap-2 md:gap-3">
+                  <Input
+                    value={input}
+                    onChange={handleInputChange}
+                    placeholder="Tell me about your travel plans... (or use speech)"
+                    className="flex-1 border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white shadow-sm text-sm md:text-base"
+                    disabled={isLoading || isSaving}
+                    autoFocus
+                  />
+                  <Button
+                    type="submit"
+                    disabled={isLoading || isSaving || !input.trim()}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 md:px-6 shadow-md transition-all duration-200 disabled:opacity-50"
+                  >
+                    {isLoading || isSaving ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </Button>
+                </form>
+
+                {/* Helper Text */}
+                <div className="mt-3 text-center">
+                  <p className="text-xs text-gray-500">
+                    🧠 Context-aware AI • 🎯 Travel planning only • 📝 All chats saved to your account
+                    {isSaving && " • 💾 Saving..."}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
-      )}
+
+        {/* Speech Panel */}
+        <SpeechPanel
+          onTranscriptChange={handleTranscriptChange}
+          onSpeakText={handleSpeakText}
+          lastAssistantMessage={lastAssistantMessage}
+          isVisible={speechPanelVisible}
+          onToggleVisibility={() => setSpeechPanelVisible(!speechPanelVisible)}
+        />
+      </div>
     </ErrorBoundary>
   )
 }
