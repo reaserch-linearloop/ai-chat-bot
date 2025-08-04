@@ -18,6 +18,7 @@ import {
   X,
   Sparkles,
   AlertTriangle,
+  Mic,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,6 +27,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ChatSidebar } from "@/components/chat-sidebar"
 import { AuthForm } from "@/components/auth/auth-form"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
+import { SpeechPanel } from "@/components/speech-panel"
 import type { ChatSession, AuthUser } from "@/lib/models"
 import { ErrorBoundary } from "@/components/error-boundary"
 
@@ -66,25 +68,28 @@ export default function TravelPlannerChatbot() {
   const [retryCount, setRetryCount] = useState(0)
   const [isTyping, setIsTyping] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [speechPanelVisible, setSpeechPanelVisible] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const lastSavedMessageCount = useRef(0)
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error, reload, setMessages } = useChat({
-    api: "/api/chat",
-    onError: (error) => {
-      console.error("Chat error:", error)
-      setErrorMessage(getErrorMessage(error))
-      setIsTyping(false)
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error, reload, setMessages, setInput } = useChat(
+    {
+      api: "/api/chat",
+      onError: (error) => {
+        console.error("Chat error:", error)
+        setErrorMessage(getErrorMessage(error))
+        setIsTyping(false)
+      },
+      onFinish: (message) => {
+        setIsTyping(false)
+        // Save the conversation after each AI response with proper deduplication
+        if (activeChat && user && token) {
+          const newMessages = [...messages, { id: Date.now().toString(), role: "assistant", content: message.content }]
+          saveMessages(newMessages)
+        }
+      },
     },
-    onFinish: (message) => {
-      setIsTyping(false)
-      // Save the conversation after each AI response with proper deduplication
-      if (activeChat && user && token) {
-        const newMessages = [...messages, { id: Date.now().toString(), role: "assistant", content: message.content }]
-        saveMessages(newMessages)
-      }
-    },
-  })
+  )
 
   // Check for stored auth on mount
   useEffect(() => {
@@ -470,6 +475,24 @@ export default function TravelPlannerChatbot() {
     window.location.reload()
   }, [])
 
+  // Speech panel handlers
+  const handleTranscriptChange = useCallback(
+    (transcript: string) => {
+      setInput(transcript)
+    },
+    [setInput],
+  )
+
+  const handleSpeakText = useCallback((text: string) => {
+    // This is handled by the speech panel itself
+  }, [])
+
+  // Get last assistant message for speech
+  const lastAssistantMessage = messages
+    .slice()
+    .reverse()
+    .find((msg) => msg.role === "assistant")?.content
+
   // Show auth form if not authenticated
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
@@ -538,20 +561,33 @@ export default function TravelPlannerChatbot() {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={handleLogout}
-                    variant="outline"
-                    size="sm"
-                    className="text-gray-600 hover:text-gray-800 hidden md:flex"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Logout
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {/* Speech Panel Toggle */}
+                    <Button
+                      onClick={() => setSpeechPanelVisible(!speechPanelVisible)}
+                      variant="outline"
+                      size="sm"
+                      className={`text-gray-600 hover:text-gray-800 ${speechPanelVisible ? "bg-blue-50 border-blue-200" : ""}`}
+                    >
+                      <Mic className="w-4 h-4 mr-2" />
+                      <span className="hidden md:inline">Speech</span>
+                    </Button>
 
-                  {/* Mobile Logout */}
-                  <Button onClick={handleLogout} variant="ghost" size="sm" className="md:hidden text-gray-600">
-                    <LogOut className="w-5 h-5" />
-                  </Button>
+                    <Button
+                      onClick={handleLogout}
+                      variant="outline"
+                      size="sm"
+                      className="text-gray-600 hover:text-gray-800 hidden md:flex bg-transparent"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
+                    </Button>
+
+                    {/* Mobile Logout */}
+                    <Button onClick={handleLogout} variant="ghost" size="sm" className="md:hidden text-gray-600">
+                      <LogOut className="w-5 h-5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -571,7 +607,7 @@ export default function TravelPlannerChatbot() {
                             onClick={handleRetry}
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100"
+                            className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100 bg-transparent"
                             disabled={retryCount >= 3}
                           >
                             <RefreshCw className="w-3 h-3 mr-1" />
@@ -581,7 +617,7 @@ export default function TravelPlannerChatbot() {
                             onClick={handleRefresh}
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100"
+                            className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-100 bg-transparent"
                           >
                             Refresh Page
                           </Button>
@@ -660,7 +696,7 @@ export default function TravelPlannerChatbot() {
                       <div className="mt-6 text-xs text-gray-500">
                         <p>
                           🎯 I only help with travel planning • 🧠 I remember our entire conversation • ✈️ I create
-                          detailed itineraries
+                          detailed itineraries • 🎤 Use speech for hands-free interaction
                         </p>
                       </div>
                     </div>
@@ -745,7 +781,7 @@ export default function TravelPlannerChatbot() {
                     <Input
                       value={input}
                       onChange={handleInputChange}
-                      placeholder="Tell me about your travel plans..."
+                      placeholder="Tell me about your travel plans... (or use speech)"
                       className="flex-1 border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white shadow-sm text-sm md:text-base"
                       disabled={isLoading || isSaving}
                       autoFocus
@@ -774,6 +810,15 @@ export default function TravelPlannerChatbot() {
               </Card>
             </div>
           </div>
+
+          {/* Speech Panel */}
+          <SpeechPanel
+            onTranscriptChange={handleTranscriptChange}
+            onSpeakText={handleSpeakText}
+            lastAssistantMessage={lastAssistantMessage}
+            isVisible={speechPanelVisible}
+            onToggleVisibility={() => setSpeechPanelVisible(!speechPanelVisible)}
+          />
         </div>
       )}
     </ErrorBoundary>
