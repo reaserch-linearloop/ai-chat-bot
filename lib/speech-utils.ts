@@ -1,8 +1,44 @@
-import type { SpeechRecognition } from "web-speech-api"
+// Inline type declarations for Web Speech API
+interface SpeechRecognitionEvent extends Event {
+  readonly resultIndex: number
+  readonly results: {
+    readonly length: number
+    [index: number]: {
+      readonly isFinal: boolean
+      readonly length: number
+      [index: number]: {
+        readonly transcript: string
+        readonly confidence: number
+      }
+    }
+  }
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  readonly error: string
+  readonly message: string
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition
+    webkitSpeechRecognition: new () => SpeechRecognition
+  }
+}
 
 export class SpeechUtils {
   private static recognition: SpeechRecognition | null = null
-  private static synthesis: SpeechSynthesis | null = null
   private static isListening = false
 
   static isSupported(): boolean {
@@ -17,7 +53,7 @@ export class SpeechUtils {
     if (typeof window === "undefined") return null
 
     try {
-      const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
       if (!SpeechRecognition) return null
 
       this.recognition = new SpeechRecognition()
